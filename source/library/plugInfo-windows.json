@@ -5,6 +5,7 @@
                 "Types": {
                     "OmniUsdResolver" : {
                         "bases": [ "ArResolver" ],
+			"uriSchemes": [ "omniverse" ],
                         "implementsContexts": true,
                         "implementsScopedCaches" : true
                     },

@@ -282,7 +282,7 @@ function use_usd(additionalUsdLibs)
             defines { "HBOOST_PYTHON_NO_LIB" }
             -- To avoid missing tbb_debug.lib error.
             filter { "configurations:debug" }
-                defines { "__TBB_NO_IMPLICIT_LINKAGE=1" }
+                defines { "__TBB_NO_IMPLICIT_LINKAGE=1" }               
         elseif mayaBuild then
             -- To avoid missing tbb_debug.lib error.
             filter { "configurations:debug" }
@@ -376,6 +376,12 @@ function use_usd(additionalUsdLibs)
     end
 
     repo_usd.use_usd(usdOptions, mergedUsdLibs)
+
+    -- Houdini 21 USD 25.05 requires explicit pxr_boost and pxr_python linking
+    filter { "system:windows" }
+        libdirs { "C:/Program Files/Side Effects Software/Houdini 21.0.631/custom/houdini/dsolib" }
+        links { "libpxr_boost", "libpxr_python", "libpxr_ar" }
+    filter {}
 end
 
 -- premake5.lua
@@ -493,6 +499,11 @@ project "omni_usd_resolver"
         buildoptions { "-fPIC" }
         links { "rt" }
         removefiles { "source/library/version.rc" }
+    filter { "system:windows" }
+        defines { 
+            "ARCH_OS_WINDOWS",
+            "MFB_ALT_PACKAGE_NAME=omni_usd_resolver"
+        }
     filter{}
 
     use_usd()

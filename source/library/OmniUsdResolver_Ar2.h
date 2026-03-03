@@ -11,7 +11,7 @@
 #pragma once
 
 #include "OmniUsdResolverCache.h"
-
+#include "../../include/Defines.h"
 #include <pxr/usd/ar/asset.h>
 #include <pxr/usd/ar/resolvedPath.h>
 #include <pxr/usd/ar/resolver.h>
@@ -19,7 +19,7 @@
 #include <pxr/usd/ar/writableAsset.h>
 
 /// \brief The Ar 2 implementation of the Omniverse Usd Resolver
-class OmniUsdResolver final : public PXR_NS::ArResolver
+class OMNIUSDRESOLVER_EXPORT_CPP OmniUsdResolver final : public PXR_NS::ArResolver
 {
 public:
     OmniUsdResolver();

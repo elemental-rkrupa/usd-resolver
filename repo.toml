@@ -41,7 +41,8 @@ fetch.pip.gather_licenses_path = ""
 # See repo_build for all the different config options related to MSVC
 msbuild.link_host_toolchain = true
 msbuild.sln_file = "OmniUsdResolver.sln"
-msbuild.vs_version = ""  # choose the latest on the system
+msbuild.vs_version = "vs2022"
+msbuild.vs_path = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community"
 
 [repo_build.docker]
 linbuild_extra_args = [

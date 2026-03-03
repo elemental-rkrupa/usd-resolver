@@ -8,6 +8,8 @@
 // without an express license agreement from NVIDIA CORPORATION or
 // its affiliates is strictly prohibited.
 
+#include <windows.h>
+
 #include "OmniUsdResolver_Ar2.h"
 
 #include "DebugCodes.h"
@@ -29,6 +31,22 @@
 
 #include <OmniClient.h>
 
+#pragma comment(linker, "/INCLUDE:??1Ar_ResolverFactoryBase@pxrInternal_v0_25_5__pxrReserved__@@UEAA@XZ")
+
+// Test: manually invoke ARCH_CONSTRUCTOR to see if .pxrctor section is created
+ARCH_CONSTRUCTOR(_TestConstructor, 200, void)
+{
+    fprintf(stderr, "ARCH_CONSTRUCTOR test fired\n");
+    fflush(stderr);
+}
+
+
+static int _dbg = []() {
+    fprintf(stderr, "omni_usd_resolver.dll loaded\n");
+    fflush(stderr);
+    return 0;
+}();
+
 PXR_NAMESPACE_USING_DIRECTIVE
 
 namespace
@@ -39,10 +57,63 @@ inline bool _IsSearchPath(const std::string& assetPath)
 }
 } // namespace
 
-AR_DEFINE_RESOLVER(OmniUsdResolver, ArResolver);
+// Force dllimport of Ar_ResolverFactoryBase type_info from libpxr_ar.dll
+extern template class __declspec(dllimport) Ar_ResolverFactory<OmniUsdResolver>;
+
+#ifdef ARCH_COMPILER_GCC
+#error "ARCH_COMPILER_GCC is defined - wrong compiler branch"
+#endif
+
+#ifdef ARCH_COMPILER_CLANG  
+#error "ARCH_COMPILER_CLANG is defined - wrong compiler branch"
+#endif
+
+#ifndef ARCH_COMPILER_MSVC
+#error "ARCH_COMPILER_MSVC is not defined"
+#endif
+
+// AR_DEFINE_RESOLVER(OmniUsdResolver, ArResolver);
+TF_REGISTRY_FUNCTION(TfType) {
+    TfType::Define<OmniUsdResolver, TfType::Bases<ArResolver>>()
+        .SetFactory<Ar_ResolverFactory<OmniUsdResolver>>();
+    
+    TfType t = TfType::Find<OmniUsdResolver>();
+    Ar_ResolverFactoryBase* factory = t.GetFactory<Ar_ResolverFactoryBase>();
+    fprintf(stderr, "Factory in TF_REGISTRY_FUNCTION: %p\n", (void*)factory);
+    fflush(stderr);
+}
+
+template class __declspec(dllimport) Ar_ResolverFactory<OmniUsdResolver>;
+
+extern "C" void TryInstantiate(void* (*fn)(void));
+
+namespace {
+struct _DebugInit {
+    _DebugInit() {
+        fprintf(stderr, "OmniUsdResolver TfType registered\n");
+        fflush(stderr);
+        TryInstantiate([]() -> void* { return new OmniUsdResolver(); });
+        
+        TfType t = TfType::Find<OmniUsdResolver>();
+        fprintf(stderr, "TfType found: %s\n", t.GetTypeName().c_str());
+
+        Ar_ResolverFactoryBase* factory = t.GetFactory<Ar_ResolverFactoryBase>();
+        fprintf(stderr, "Factory: %p\n", (void*)factory);
+        if (factory) {
+            ArResolver* r = factory->New();
+            fprintf(stderr, "factory->New() returned: %p\n", (void*)r);
+        }
+        fflush(stderr);
+
+    }
+} _debugInit;
+}
 
 OmniUsdResolver::OmniUsdResolver()
 {
+    OutputDebugStringA("OmniUsdResolver::OmniUsdResolver() entry\n");
+    fprintf(stderr, "OmniUsdResolver constructor called\n");
+    fflush(stderr);    
 }
 
 OmniUsdResolver::~OmniUsdResolver()
