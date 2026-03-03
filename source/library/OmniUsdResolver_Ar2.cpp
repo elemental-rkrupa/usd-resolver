@@ -57,41 +57,40 @@ inline bool _IsSearchPath(const std::string& assetPath)
 }
 } // namespace
 
-// Force dllimport of Ar_ResolverFactoryBase type_info from libpxr_ar.dll
-extern template class __declspec(dllimport) Ar_ResolverFactory<OmniUsdResolver>;
-
-#ifdef ARCH_COMPILER_GCC
-#error "ARCH_COMPILER_GCC is defined - wrong compiler branch"
-#endif
-
-#ifdef ARCH_COMPILER_CLANG  
-#error "ARCH_COMPILER_CLANG is defined - wrong compiler branch"
-#endif
-
-#ifndef ARCH_COMPILER_MSVC
-#error "ARCH_COMPILER_MSVC is not defined"
-#endif
+// Ar_ResolverFactory<T> is a header-only template — it is NOT exported from
+// libpxr_ar.dll and must be instantiated locally. Ar_ResolverFactoryBase has
+// AR_API (__declspec(dllimport)), so its vtable and type_info are imported from
+// libpxr_ar.dll automatically, making dynamic_cast across the DLL boundary work.
 
 // AR_DEFINE_RESOLVER(OmniUsdResolver, ArResolver);
+// Kept as explicit TF_REGISTRY_FUNCTION for clarity. NOTE: this relies on
+// the .pxrctor PE section mechanism (ARCH_CONSTRUCTOR) which is currently not
+// emitting entries in our build — factory registration is handled by _DebugInit
+// below using a standard C++ static initialiser as a workaround.
 TF_REGISTRY_FUNCTION(TfType) {
     TfType::Define<OmniUsdResolver, TfType::Bases<ArResolver>>()
         .SetFactory<Ar_ResolverFactory<OmniUsdResolver>>();
-    
+
     TfType t = TfType::Find<OmniUsdResolver>();
     Ar_ResolverFactoryBase* factory = t.GetFactory<Ar_ResolverFactoryBase>();
     fprintf(stderr, "Factory in TF_REGISTRY_FUNCTION: %p\n", (void*)factory);
     fflush(stderr);
 }
 
-template class __declspec(dllimport) Ar_ResolverFactory<OmniUsdResolver>;
-
 extern "C" void TryInstantiate(void* (*fn)(void));
 
 namespace {
 struct _DebugInit {
     _DebugInit() {
-        fprintf(stderr, "OmniUsdResolver TfType registered\n");
+        // Option B: register factory via standard C++ static initialiser.
+        // TF_REGISTRY_FUNCTION relies on the .pxrctor PE section mechanism which
+        // is currently not emitting entries in our build. This ensures SetFactory
+        // is called regardless, using the same static init path as _dbg above.
+        TfType::Define<OmniUsdResolver, TfType::Bases<ArResolver>>()
+            .SetFactory<Ar_ResolverFactory<OmniUsdResolver>>();
+        fprintf(stderr, "OmniUsdResolver factory registered via static init\n");
         fflush(stderr);
+
         TryInstantiate([]() -> void* { return new OmniUsdResolver(); });
         
         TfType t = TfType::Find<OmniUsdResolver>();
