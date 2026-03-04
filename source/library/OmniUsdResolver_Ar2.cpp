@@ -8,8 +8,6 @@
 // without an express license agreement from NVIDIA CORPORATION or
 // its affiliates is strictly prohibited.
 
-#include <windows.h>
-
 #include "OmniUsdResolver_Ar2.h"
 
 #include "DebugCodes.h"
@@ -31,21 +29,12 @@
 
 #include <OmniClient.h>
 
+// Force import of Ar_ResolverFactoryBase vtable and type_info from libpxr_ar.dll.
+// Required for dynamic_cast<Ar_ResolverFactoryBase*> across the DLL boundary to succeed
+// in TfType::GetFactory<Ar_ResolverFactoryBase>(). Ar_ResolverFactory<T> is a header-only
+// template instantiated locally; Ar_ResolverFactoryBase has AR_API so its identity comes
+// from libpxr_ar.dll automatically.
 #pragma comment(linker, "/INCLUDE:??1Ar_ResolverFactoryBase@pxrInternal_v0_25_5__pxrReserved__@@UEAA@XZ")
-
-// Test: manually invoke ARCH_CONSTRUCTOR to see if .pxrctor section is created
-ARCH_CONSTRUCTOR(_TestConstructor, 200, void)
-{
-    fprintf(stderr, "ARCH_CONSTRUCTOR test fired\n");
-    fflush(stderr);
-}
-
-
-static int _dbg = []() {
-    fprintf(stderr, "omni_usd_resolver.dll loaded\n");
-    fflush(stderr);
-    return 0;
-}();
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -57,62 +46,21 @@ inline bool _IsSearchPath(const std::string& assetPath)
 }
 } // namespace
 
-// Ar_ResolverFactory<T> is a header-only template — it is NOT exported from
-// libpxr_ar.dll and must be instantiated locally. Ar_ResolverFactoryBase has
-// AR_API (__declspec(dllimport)), so its vtable and type_info are imported from
-// libpxr_ar.dll automatically, making dynamic_cast across the DLL boundary work.
-
-// AR_DEFINE_RESOLVER(OmniUsdResolver, ArResolver);
-// Kept as explicit TF_REGISTRY_FUNCTION for clarity. NOTE: this relies on
-// the .pxrctor PE section mechanism (ARCH_CONSTRUCTOR) which is currently not
-// emitting entries in our build — factory registration is handled by _DebugInit
-// below using a standard C++ static initialiser as a workaround.
-TF_REGISTRY_FUNCTION(TfType) {
-    TfType::Define<OmniUsdResolver, TfType::Bases<ArResolver>>()
-        .SetFactory<Ar_ResolverFactory<OmniUsdResolver>>();
-
-    TfType t = TfType::Find<OmniUsdResolver>();
-    Ar_ResolverFactoryBase* factory = t.GetFactory<Ar_ResolverFactoryBase>();
-    fprintf(stderr, "Factory in TF_REGISTRY_FUNCTION: %p\n", (void*)factory);
-    fflush(stderr);
-}
-
-extern "C" void TryInstantiate(void* (*fn)(void));
-
+// AR_DEFINE_RESOLVER(OmniUsdResolver, ArResolver) is the standard USD macro but relies on
+// the ARCH_CONSTRUCTOR / .pxrctor PE section mechanism to invoke the TF_REGISTRY_FUNCTION at
+// DLL load. On Windows with Houdini 21 / USD 25.05 this section is not emitted in our build.
+// Register the type and factory via a standard C++ static initialiser instead.
 namespace {
-struct _DebugInit {
-    _DebugInit() {
-        // Option B: register factory via standard C++ static initialiser.
-        // TF_REGISTRY_FUNCTION relies on the .pxrctor PE section mechanism which
-        // is currently not emitting entries in our build. This ensures SetFactory
-        // is called regardless, using the same static init path as _dbg above.
+struct _ResolverRegistration {
+    _ResolverRegistration() {
         TfType::Define<OmniUsdResolver, TfType::Bases<ArResolver>>()
             .SetFactory<Ar_ResolverFactory<OmniUsdResolver>>();
-        fprintf(stderr, "OmniUsdResolver factory registered via static init\n");
-        fflush(stderr);
-
-        TryInstantiate([]() -> void* { return new OmniUsdResolver(); });
-        
-        TfType t = TfType::Find<OmniUsdResolver>();
-        fprintf(stderr, "TfType found: %s\n", t.GetTypeName().c_str());
-
-        Ar_ResolverFactoryBase* factory = t.GetFactory<Ar_ResolverFactoryBase>();
-        fprintf(stderr, "Factory: %p\n", (void*)factory);
-        if (factory) {
-            ArResolver* r = factory->New();
-            fprintf(stderr, "factory->New() returned: %p\n", (void*)r);
-        }
-        fflush(stderr);
-
     }
-} _debugInit;
+} _resolverRegistration;
 }
 
 OmniUsdResolver::OmniUsdResolver()
 {
-    OutputDebugStringA("OmniUsdResolver::OmniUsdResolver() entry\n");
-    fprintf(stderr, "OmniUsdResolver constructor called\n");
-    fflush(stderr);    
 }
 
 OmniUsdResolver::~OmniUsdResolver()
